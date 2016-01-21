@@ -1,3 +1,8 @@
+
+# To follow the progress with TensorBoard, start it like that:
+# python tensorflow/tensorboard/tensorboard.py --logdir=path/to/ladder/logs
+# and then open the browser at http://localhost:6006 (if you're running it locally)
+
 import tensorflow as tf
 import input_data
 import math
@@ -168,6 +173,7 @@ pred_cost = -tf.reduce_mean(tf.reduce_sum(outputs*tf.log(y), 1)) # cost used for
 
 correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(outputs, 1)) # no of correct predictions
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float")) * tf.constant(100.0)
+_ = tf.scalar_summary('accuracy', accuracy)
 
 learning_rate = tf.Variable(starter_learning_rate, trainable=False)
 train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
@@ -201,8 +207,18 @@ else:
     init  = tf.initialize_all_variables()
     sess.run(init)
 
+# Prepare logs directory
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+merged = tf.merge_all_summaries()
+writer = tf.train.SummaryWriter(logdir="logs",
+                                graph_def=sess.graph_def,
+                                max_queue=10, flush_secs=5)
 print "=== Training ==="
-print "Initial Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, training: False}), "%"
+
+summary_str, cur_accuracy = sess.run([merged, accuracy], feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, training: False})
+print "Initial Accuracy: ", cur_accuracy, "%"
+writer.add_summary(summary_str, i_iter)
 
 for i in tqdm(range(i_iter, num_iter)):
     images, labels = mnist.train.next_batch(batch_size)
@@ -220,7 +236,9 @@ for i in tqdm(range(i_iter, num_iter)):
 	with open('train_log', 'ab') as train_log:
             # write test accuracy to file "train_log"
             train_log_w = csv.writer(train_log)
-            log_i = [epoch_n] + sess.run([accuracy], feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False})
+            summary_str, cur_accuracy = sess.run([merged, accuracy], feed_dict={inputs: mnist.test.images, outputs:mnist.test.labels, training: False})
+            writer.add_summary(summary_str, i)
+            log_i = [epoch_n] + cur_accuracy
             train_log_w.writerow(log_i)
 
 print "Final Accuracy: ", sess.run(accuracy, feed_dict={inputs: mnist.test.images, outputs: mnist.test.labels, training: False}), "%"
